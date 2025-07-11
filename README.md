@@ -78,3 +78,9 @@ Drag & Drop - Easy image loading in SDL2 version
 The clients handle all the networking details and provide both command-line and interactive interfaces for working with your remote Hailo NPU. Which approach would you like to start with?
 
 ![starfive_vision2](https://github.com/user-attachments/assets/4ed58f38-85f2-48ae-a9e6-5f1abe1cb805)
+
+<BR>
+<BR>
+
+
+![SpecemITk1](https://github.com/user-attachments/assets/85f9dcc3-c793-4378-b312-546f33ff0ad5)
