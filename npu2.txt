@@ -1,0 +1,981 @@
+To enable your x86 PC to access the NPU on a RISC-V machine over the network, you'll need to set up a server application on the RISC-V machine that can:
+
+Accept network connections from your x86 client
+Interface with the NPU hardware on the RISC-V system
+Execute NPU operations and return results
+
+Here are the main approaches:
+Custom NPU Server Application
+You'd need to develop a server application that:
+
+Listens on a network port (TCP/UDP)
+Provides an API for NPU operations (REST, gRPC, or custom protocol)
+Uses the RISC-V NPU's native drivers/SDK
+Handles job queuing and resource management
+
+Existing Frameworks to Consider
+TensorFlow Serving - If the NPU supports TensorFlow operations, you can run TF Serving on the RISC-V machine and communicate via REST/gRPC from your x86 client.
+ONNX Runtime Server - Similar approach if the NPU supports ONNX model execution.
+OpenVINO - Intel's toolkit that might support your NPU if it's compatible.
+Key Requirements for the RISC-V Application
+
+NPU Drivers - The Linux kernel must have drivers for your specific NPU hardware
+NPU SDK/Library - Low-level libraries to program the NPU (vendor-specific)
+Network Interface - Server component to handle remote requests
+Memory Management - Efficient handling of data transfers between system RAM and NPU memory
+
+Communication Protocol Options
+
+HTTP/REST - Simple, widely supported
+gRPC - Efficient binary protocol, good for high-performance scenarios
+Custom TCP/UDP - Maximum control and efficiency
+Message Queue (Redis, RabbitMQ) - For asynchronous processing
+
+The specific implementation depends heavily on which NPU you're using and what software stack it supports. What NPU hardware are you working with?
+
+
+*******************************************************************************************************************************************
+
+Direct NPU Programming Approaches
+1. Memory-Mapped I/O (MMIO)
+Most NPUs are controlled through memory-mapped registers:
+
+
+// Example of direct register access
+#include <sys/mman.h>
+#include <fcntl.h>
+
+#define NPU_BASE_ADDR 0x10000000  // Your NPU's base address
+#define NPU_CTRL_REG  0x00
+#define NPU_DATA_REG  0x04
+#define NPU_STATUS_REG 0x08
+
+volatile uint32_t *npu_regs;
+
+int init_npu() {
+    int fd = open("/dev/mem", O_RDWR | O_SYNC);
+    npu_regs = mmap(NULL, 4096, PROT_READ | PROT_WRITE, 
+                    MAP_SHARED, fd, NPU_BASE_ADDR);
+    return (npu_regs == MAP_FAILED) ? -1 : 0;
+}
+
+void npu_start_inference() {
+    npu_regs[NPU_CTRL_REG] = 0x01;  // Start bit
+}
+
+uint32_t npu_read_status() {
+    return npu_regs[NPU_STATUS_REG];
+}
+
+
+
+
+******************************************************************************************************************************************
+2. Writing a Simple Kernel Module
+For more control and better resource management:
+
+
+// npu_driver.c
+#include <linux/module.h>
+#include <linux/kernel.h>
+#include <linux/init.h>
+#include <linux/fs.h>
+#include <linux/device.h>
+#include <linux/uaccess.h>
+#include <linux/io.h>
+
+#define DEVICE_NAME "npu_dev"
+#define NPU_BASE_ADDR 0x10000000
+
+static int major_number;
+static struct class* npu_class = NULL;
+static struct device* npu_device = NULL;
+static void __iomem *npu_base;
+
+static int npu_open(struct inode *inodep, struct file *filep) {
+    return 0;
+}
+
+static ssize_t npu_write(struct file *filep, const char *buffer, 
+                        size_t len, loff_t *offset) {
+    // Handle NPU commands from userspace
+    // Parse buffer for NPU operations
+    return len;
+}
+
+static ssize_t npu_read(struct file *filep, char *buffer, 
+                       size_t len, loff_t *offset) {
+    // Return NPU results to userspace
+    return 0;
+}
+
+static struct file_operations fops = {
+    .open = npu_open,
+    .read = npu_read,
+    .write = npu_write,
+};
+
+static int __init npu_init(void) {
+    // Register character device
+    major_number = register_chrdev(0, DEVICE_NAME, &fops);
+    
+    // Map NPU registers
+    npu_base = ioremap(NPU_BASE_ADDR, 4096);
+    
+    return 0;
+}
+
+static void __exit npu_exit(void) {
+    iounmap(npu_base);
+    unregister_chrdev(major_number, DEVICE_NAME);
+}
+
+module_init(npu_init);
+module_exit(npu_exit);
+
+**********************************************************************************
+
+3. Userspace Application to Control NPU
+
+
+// npu_server.c
+#include <stdio.h>
+#include <stdlib.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <unistd.h>
+#include <sys/mman.h>
+#include <fcntl.h>
+
+typedef struct {
+    uint32_t command;
+    uint32_t data_size;
+    uint8_t data[];
+} npu_packet_t;
+
+void handle_npu_inference(npu_packet_t *packet) {
+    // 1. Load data into NPU memory
+    // 2. Configure NPU registers
+    // 3. Start inference
+    // 4. Wait for completion
+    // 5. Read results
+}
+
+int main() {
+    int server_fd, client_fd;
+    struct sockaddr_in address;
+    
+    // Initialize NPU hardware
+    init_npu();
+    
+    // Create socket server
+    server_fd = socket(AF_INET, SOCK_STREAM, 0);
+    address.sin_family = AF_INET;
+    address.sin_addr.s_addr = INADDR_ANY;
+    address.sin_port = htons(8080);
+    
+    bind(server_fd, (struct sockaddr *)&address, sizeof(address));
+    listen(server_fd, 3);
+    
+    while(1) {
+        client_fd = accept(server_fd, NULL, NULL);
+        
+        // Handle client requests
+        npu_packet_t packet;
+        read(client_fd, &packet, sizeof(packet));
+        
+        handle_npu_inference(&packet);
+        
+        close(client_fd);
+    }
+    
+    return 0;
+}
+
+
+**************************************************************************
+
+
+What You Need to Know About Your NPU
+
+Memory Map - What addresses control the NPU?
+Register Layout - Control, status, data registers
+DMA Capabilities - How does data transfer work?
+Interrupt Handling - How does the NPU signal completion?
+Power Management - Clock gating, power domains
+
+Tools to Help You
+
+Device Tree - Check /proc/device-tree for NPU hardware description
+Memory mapping - Use /dev/mem or write a kernel module
+Debugging - Use devmem command to read/write registers directly
+Documentation - Look for NPU datasheet or reference manual
+**********************************************************************
+
+
+Star Five Vision 2
+
+One of the boards is using: Hailo-8L M.2 AI Accelerator Module
+
+Edit
+Perfect! The Hailo-8L is a well-documented NPU with excellent software support. You have several options for programming it on your RISC-V machine:
+
+Official Hailo Software Stack
+1. Hailo Runtime (HailoRT)
+This is Hailo's official runtime library that provides:
+
+C/C++ API for NPU control
+Python bindings
+Model loading and inference
+Memory management
+bash
+# Install HailoRT on your RISC-V Linux system
+wget https://hailo.ai/downloads/hailort-4.x.x-linux.tar.gz
+tar -xzf hailort-4.x.x-linux.tar.gz
+cd hailort-4.x.x-linux
+sudo ./install.sh
+2. Basic C++ Server Example
+cpp
+// hailo_npu_server.cpp
+#include <hailo/hailort.hpp>
+#include <iostream>
+#include <vector>
+#include <thread>
+#include <sys/socket.h>
+#include <netinet/in.h>
+
+using namespace hailort;
+
+class HailoNPUServer {
+private:
+    std::unique_ptr<Device> device;
+    std::unique_ptr<ConfiguredNetworkGroup> network_group;
+    
+public:
+    bool initialize() {
+        // Initialize Hailo device
+        auto devices = Device::scan();
+        if (devices.empty()) {
+            std::cerr << "No Hailo devices found!" << std::endl;
+            return false;
+        }
+        
+        device = std::move(devices[0]);
+        
+        // Load your compiled model (.hef file)
+        auto hef = Hef::create("your_model.hef");
+        if (!hef) {
+            std::cerr << "Failed to load HEF file" << std::endl;
+            return false;
+        }
+        
+        // Configure network
+        auto network_groups = device->configure(hef.value());
+        if (network_groups.empty()) {
+            std::cerr << "Failed to configure network" << std::endl;
+            return false;
+        }
+        
+        network_group = std::move(network_groups[0]);
+        return true;
+    }
+    
+    std::vector<uint8_t> run_inference(const std::vector<uint8_t>& input_data) {
+        // Get input/output streams
+        auto input_streams = network_group->get_input_streams();
+        auto output_streams = network_group->get_output_streams();
+        
+        // Activate network group
+        auto activated_network_group = network_group->activate();
+        
+        // Write input data
+        auto status = input_streams[0].write(MemoryView(input_data.data(), input_data.size()));
+        if (status != HAILO_SUCCESS) {
+            std::cerr << "Failed to write input data" << std::endl;
+            return {};
+        }
+        
+        // Read output data
+        std::vector<uint8_t> output_data(output_streams[0].get_info().hw_frame_size);
+        status = output_streams[0].read(MemoryView(output_data.data(), output_data.size()));
+        if (status != HAILO_SUCCESS) {
+            std::cerr << "Failed to read output data" << std::endl;
+            return {};
+        }
+        
+        return output_data;
+    }
+};
+
+int main() {
+    HailoNPUServer server;
+    if (!server.initialize()) {
+        return -1;
+    }
+    
+    // Create TCP server
+    int server_fd = socket(AF_INET, SOCK_STREAM, 0);
+    struct sockaddr_in address;
+    address.sin_family = AF_INET;
+    address.sin_addr.s_addr = INADDR_ANY;
+    address.sin_port = htons(8080);
+    
+    bind(server_fd, (struct sockaddr*)&address, sizeof(address));
+    listen(server_fd, 10);
+    
+    std::cout << "Hailo NPU Server listening on port 8080..." << std::endl;
+    
+    while (true) {
+        int client_fd = accept(server_fd, nullptr, nullptr);
+        
+        // Handle client in separate thread
+        std::thread([&server, client_fd]() {
+            // Read input data size
+            uint32_t data_size;
+            read(client_fd, &data_size, sizeof(data_size));
+            
+            // Read input data
+            std::vector<uint8_t> input_data(data_size);
+            read(client_fd, input_data.data(), data_size);
+            
+            // Run inference
+            auto output_data = server.run_inference(input_data);
+            
+            // Send results back
+            uint32_t output_size = output_data.size();
+            write(client_fd, &output_size, sizeof(output_size));
+            write(client_fd, output_data.data(), output_size);
+            
+            close(client_fd);
+        }).detach();
+    }
+    
+    return 0;
+}
+3. Python Alternative (Simpler)
+python
+# hailo_server.py
+import socket
+import threading
+from hailo_platform import HEF, Device, VDevice, HailoStreamInterface, InferVStreams, ConfigureParams
+import numpy as np
+
+class HailoServer:
+    def __init__(self, hef_path):
+        self.hef = HEF(hef_path)
+        self.device = Device()
+        self.network_group = self.device.configure(self.hef)
+        
+    def run_inference(self, input_data):
+        with self.network_group.activate():
+            # Prepare input
+            input_dict = {}
+            for input_layer in self.network_group.get_input_layers():
+                input_dict[input_layer.name] = input_data
+            
+            # Run inference
+            output_dict = self.network_group.infer(input_dict)
+            
+            return output_dict
+    
+    def handle_client(self, client_socket):
+        # Receive data size
+        data_size = int.from_bytes(client_socket.recv(4), byteorder='little')
+        
+        # Receive input data
+        input_data = client_socket.recv(data_size)
+        input_array = np.frombuffer(input_data, dtype=np.uint8)
+        
+        # Run inference
+        results = self.run_inference(input_array)
+        
+        # Send results back
+        output_data = list(results.values())[0].tobytes()
+        client_socket.send(len(output_data).to_bytes(4, byteorder='little'))
+        client_socket.send(output_data)
+        
+        client_socket.close()
+
+def main():
+    server = HailoServer("your_model.hef")
+    
+    # Create server socket
+    server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    server_socket.bind(('0.0.0.0', 8080))
+    server_socket.listen(10)
+    
+    print("Hailo NPU Server listening on port 8080...")
+    
+    while True:
+        client_socket, address = server_socket.accept()
+        client_thread = threading.Thread(target=server.handle_client, args=(client_socket,))
+        client_thread.start()
+
+if __name__ == "__main__":
+    main()
+Compilation and Setup
+bash
+# Compile C++ version
+g++ -o hailo_server hailo_npu_server.cpp -lhailort -lpthread
+
+# Install Python dependencies
+pip3 install hailo-platform numpy
+
+# Check if Hailo device is detected
+hailortcli fw-control identify
+Key Points for Hailo-8L:
+HEF Files - You need to compile your models to Hailo's format using their DFC (Dataflow Compiler)
+Performance - Hailo-8L can do up to 13 TOPS
+Memory - Has dedicated on-chip memory for models
+Multiple Streams - Supports concurrent inference streams
+The Hailo software stack handles all the low-level NPU programming for you, so you don't need to write drivers or deal with registers directly. Their API is quite mature and well-documented.
+
+*******************************************************************************************************************************************
+
+x86 Client Side to communicate to RISC-V NPU
+
+#!/usr/bin/env python3
+# hailo_client.py
+import socket
+import time
+import numpy as np
+from PIL import Image
+import argparse
+import sys
+
+class HailoNPUClient:
+    def __init__(self, server_ip, server_port=8080):
+        self.server_ip = server_ip
+        self.server_port = server_port
+    
+    def run_remote_inference(self, input_data):
+        """Send data to remote NPU and get results"""
+        try:
+            # Create socket connection
+            client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            client_socket.connect((self.server_ip, self.server_port))
+            
+            # Send input data size
+            data_bytes = input_data.tobytes()
+            data_size = len(data_bytes)
+            client_socket.send(data_size.to_bytes(4, byteorder='little'))
+            
+            # Send input data
+            client_socket.send(data_bytes)
+            
+            # Receive output data size
+            output_size_bytes = client_socket.recv(4)
+            output_size = int.from_bytes(output_size_bytes, byteorder='little')
+            
+            # Receive output data
+            output_data = b''
+            while len(output_data) < output_size:
+                chunk = client_socket.recv(min(4096, output_size - len(output_data)))
+                if not chunk:
+                    break
+                output_data += chunk
+            
+            client_socket.close()
+            
+            # Convert back to numpy array
+            return np.frombuffer(output_data, dtype=np.float32)
+            
+        except Exception as e:
+            print(f"Error during remote inference: {e}")
+            return None
+    
+    def load_image(self, image_path, target_size=(224, 224)):
+        """Load and preprocess image for inference"""
+        try:
+            # Load image
+            image = Image.open(image_path)
+            print(f"Original image size: {image.size}")
+            
+            # Resize image
+            image = image.resize(target_size)
+            
+            # Convert to RGB if needed
+            if image.mode != 'RGB':
+                image = image.convert('RGB')
+            
+            # Convert to numpy array and normalize
+            image_array = np.array(image, dtype=np.float32)
+            
+            # Normalize to [0, 1] range
+            image_array = image_array / 255.0
+            
+            # Add batch dimension and transpose to CHW format (if needed)
+            # image_array = np.transpose(image_array, (2, 0, 1))  # HWC to CHW
+            # image_array = np.expand_dims(image_array, axis=0)   # Add batch dimension
+            
+            return image_array
+            
+        except Exception as e:
+            print(f"Error loading image: {e}")
+            return None
+    
+    def load_raw_data(self, file_path):
+        """Load raw binary data"""
+        try:
+            with open(file_path, 'rb') as f:
+                data = f.read()
+            return np.frombuffer(data, dtype=np.uint8)
+        except Exception as e:
+            print(f"Error loading raw data: {e}")
+            return None
+    
+    def save_results(self, results, output_path):
+        """Save results to file"""
+        try:
+            with open(output_path, 'wb') as f:
+                f.write(results.tobytes())
+            print(f"Results saved to: {output_path}")
+        except Exception as e:
+            print(f"Error saving results: {e}")
+    
+    def benchmark_inference(self, input_data, num_iterations=10):
+        """Run benchmark test"""
+        print(f"Running benchmark with {num_iterations} iterations...")
+        
+        times = []
+        successful_runs = 0
+        
+        for i in range(num_iterations):
+            start_time = time.time()
+            
+            results = self.run_remote_inference(input_data)
+            
+            end_time = time.time()
+            
+            if results is not None:
+                times.append(end_time - start_time)
+                successful_runs += 1
+                print(f"Iteration {i+1}: {(end_time - start_time)*1000:.2f} ms")
+            else:
+                print(f"Iteration {i+1}: Failed")
+        
+        if times:
+            avg_time = np.mean(times)
+            min_time = np.min(times)
+            max_time = np.max(times)
+            std_time = np.std(times)
+            
+            print(f"\nBenchmark Results:")
+            print(f"Successful runs: {successful_runs}/{num_iterations}")
+            print(f"Average time: {avg_time*1000:.2f} ms")
+            print(f"Min time: {min_time*1000:.2f} ms")
+            print(f"Max time: {max_time*1000:.2f} ms")
+            print(f"Std deviation: {std_time*1000:.2f} ms")
+            print(f"Throughput: {1.0/avg_time:.2f} inferences/second")
+        else:
+            print("No successful runs to analyze")
+    
+    def test_connection(self):
+        """Test if server is reachable"""
+        try:
+            client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            client_socket.settimeout(5)  # 5 second timeout
+            result = client_socket.connect_ex((self.server_ip, self.server_port))
+            client_socket.close()
+            return result == 0
+        except:
+            return False
+
+def main():
+    parser = argparse.ArgumentParser(description='Hailo NPU Client')
+    parser.add_argument('server_ip', help='IP address of the RISC-V server')
+    parser.add_argument('input_file', help='Input file (image or raw data)')
+    parser.add_argument('--output', '-o', default='output_results.bin', 
+                       help='Output file for results')
+    parser.add_argument('--benchmark', '-b', action='store_true',
+                       help='Run benchmark test')
+    parser.add_argument('--iterations', '-i', type=int, default=10,
+                       help='Number of benchmark iterations')
+    parser.add_argument('--image-size', nargs=2, type=int, default=[224, 224],
+                       help='Target image size (width height)')
+    parser.add_argument('--raw-data', action='store_true',
+                       help='Load input as raw binary data instead of image')
+    
+    args = parser.parse_args()
+    
+    # Create client
+    client = HailoNPUClient(args.server_ip)
+    
+    # Test connection
+    print(f"Testing connection to {args.server_ip}:8080...")
+    if not client.test_connection():
+        print("ERROR: Cannot connect to server. Make sure:")
+        print("1. Server is running on the RISC-V machine")
+        print("2. IP address is correct")
+        print("3. Port 8080 is open")
+        sys.exit(1)
+    
+    print("Connection successful!")
+    
+    # Load input data
+    print(f"Loading input file: {args.input_file}")
+    if args.raw_data:
+        input_data = client.load_raw_data(args.input_file)
+    else:
+        input_data = client.load_image(args.input_file, tuple(args.image_size))
+    
+    if input_data is None:
+        print("Failed to load input data")
+        sys.exit(1)
+    
+    print(f"Input data shape: {input_data.shape}")
+    print(f"Input data size: {input_data.nbytes} bytes")
+    
+    # Run inference
+    print("Running inference on remote NPU...")
+    start_time = time.time()
+    
+    results = client.run_remote_inference(input_data)
+    
+    end_time = time.time()
+    
+    if results is None:
+        print("Inference failed")
+        sys.exit(1)
+    
+    print(f"Inference completed in {(end_time - start_time)*1000:.2f} ms")
+    print(f"Output shape: {results.shape}")
+    print(f"Output size: {results.nbytes} bytes")
+    
+    # Save results
+    client.save_results(results, args.output)
+    
+    # Optional benchmark
+    if args.benchmark:
+        print("\nRunning benchmark...")
+        client.benchmark_inference(input_data, args.iterations)
+
+if __name__ == "__main__":
+    main()
+	
+	
+*************************************************************************************************************
+
+Client SDL2
+
+// hailo_sdl2_client.cpp
+#include <SDL2/SDL.h>
+#include <SDL2/SDL_image.h>
+#include <iostream>
+#include <vector>
+#include <sys/socket.h>
+#include <arpa/inet.h>
+#include <unistd.h>
+#include <thread>
+#include <mutex>
+#include <atomic>
+
+class HailoSDLClient {
+private:
+    SDL_Window* window;
+    SDL_Renderer* renderer;
+    SDL_Surface* current_surface;
+    std::string server_ip;
+    int server_port;
+    std::atomic<bool> inference_running;
+    std::mutex result_mutex;
+    std::vector<uint8_t> latest_results;
+    
+public:
+    HailoSDLClient(const std::string& ip, int port, int width = 800, int height = 600)
+        : server_ip(ip), server_port(port), inference_running(false) {
+        
+        // Initialize SDL
+        if (SDL_Init(SDL_INIT_VIDEO) < 0) {
+            std::cerr << "SDL Init failed: " << SDL_GetError() << std::endl;
+            throw std::runtime_error("SDL initialization failed");
+        }
+        
+        // Initialize SDL_image
+        if (!(IMG_Init(IMG_INIT_PNG | IMG_INIT_JPG))) {
+            std::cerr << "SDL_image Init failed: " << IMG_GetError() << std::endl;
+            throw std::runtime_error("SDL_image initialization failed");
+        }
+        
+        // Create window
+        window = SDL_CreateWindow("Hailo NPU Client",
+                                 SDL_WINDOWPOS_CENTERED,
+                                 SDL_WINDOWPOS_CENTERED,
+                                 width, height,
+                                 SDL_WINDOW_SHOWN);
+        
+        if (!window) {
+            std::cerr << "Window creation failed: " << SDL_GetError() << std::endl;
+            throw std::runtime_error("Window creation failed");
+        }
+        
+        // Create renderer
+        renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED);
+        if (!renderer) {
+            std::cerr << "Renderer creation failed: " << SDL_GetError() << std::endl;
+            throw std::runtime_error("Renderer creation failed");
+        }
+        
+        current_surface = nullptr;
+    }
+    
+    ~HailoSDLClient() {
+        if (current_surface) {
+            SDL_FreeSurface(current_surface);
+        }
+        if (renderer) {
+            SDL_DestroyRenderer(renderer);
+        }
+        if (window) {
+            SDL_DestroyWindow(window);
+        }
+        IMG_Quit();
+        SDL_Quit();
+    }
+    
+    std::vector<uint8_t> surface_to_bytes(SDL_Surface* surface) {
+        // Convert SDL surface to raw bytes for NPU processing
+        std::vector<uint8_t> data;
+        
+        // Lock surface for pixel access
+        if (SDL_LockSurface(surface) != 0) {
+            std::cerr << "Failed to lock surface: " << SDL_GetError() << std::endl;
+            return data;
+        }
+        
+        // Convert pixels to RGB format
+        data.reserve(surface->w * surface->h * 3);
+        uint8_t* pixels = (uint8_t*)surface->pixels;
+        
+        for (int y = 0; y < surface->h; ++y) {
+            for (int x = 0; x < surface->w; ++x) {
+                int pixel_index = y * surface->pitch + x * surface->format->BytesPerPixel;
+                uint32_t pixel = *(uint32_t*)(pixels + pixel_index);
+                
+                uint8_t r, g, b;
+                SDL_GetRGB(pixel, surface->format, &r, &g, &b);
+                
+                data.push_back(r);
+                data.push_back(g);
+                data.push_back(b);
+            }
+        }
+        
+        SDL_UnlockSurface(surface);
+        return data;
+    }
+    
+    std::vector<uint8_t> run_remote_inference(const std::vector<uint8_t>& input_data) {
+        // Same networking code as before
+        int sock = socket(AF_INET, SOCK_STREAM, 0);
+        if (sock < 0) {
+            std::cerr << "Socket creation failed" << std::endl;
+            return {};
+        }
+        
+        struct sockaddr_in serv_addr;
+        serv_addr.sin_family = AF_INET;
+        serv_addr.sin_port = htons(server_port);
+        
+        if (inet_pton(AF_INET, server_ip.c_str(), &serv_addr.sin_addr) <= 0) {
+            std::cerr << "Invalid address" << std::endl;
+            close(sock);
+            return {};
+        }
+        
+        if (connect(sock, (struct sockaddr*)&serv_addr, sizeof(serv_addr)) < 0) {
+            std::cerr << "Connection failed" << std::endl;
+            close(sock);
+            return {};
+        }
+        
+        // Send data
+        uint32_t data_size = input_data.size();
+        send(sock, &data_size, sizeof(data_size), 0);
+        send(sock, input_data.data(), data_size, 0);
+        
+        // Receive results
+        uint32_t output_size;
+        recv(sock, &output_size, sizeof(output_size), 0);
+        
+        std::vector<uint8_t> output_data(output_size);
+        recv(sock, output_data.data(), output_size, 0);
+        
+        close(sock);
+        return output_data;
+    }
+    
+    void run_inference_async(const std::vector<uint8_t>& input_data) {
+        if (inference_running.load()) {
+            std::cout << "Inference already running..." << std::endl;
+            return;
+        }
+        
+        inference_running.store(true);
+        
+        std::thread([this, input_data]() {
+            auto results = run_remote_inference(input_data);
+            
+            {
+                std::lock_guard<std::mutex> lock(result_mutex);
+                latest_results = results;
+            }
+            
+            inference_running.store(false);
+            std::cout << "Inference completed!" << std::endl;
+        }).detach();
+    }
+    
+    bool load_image(const std::string& filename) {
+        if (current_surface) {
+            SDL_FreeSurface(current_surface);
+        }
+        
+        current_surface = IMG_Load(filename.c_str());
+        if (!current_surface) {
+            std::cerr << "Failed to load image: " << IMG_GetError() << std::endl;
+            return false;
+        }
+        
+        std::cout << "Loaded image: " << filename << std::endl;
+        std::cout << "Dimensions: " << current_surface->w << "x" << current_surface->h << std::endl;
+        
+        return true;
+    }
+    
+    void render() {
+        // Clear screen
+        SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
+        SDL_RenderClear(renderer);
+        
+        if (current_surface) {
+            // Create texture from surface
+            SDL_Texture* texture = SDL_CreateTextureFromSurface(renderer, current_surface);
+            if (texture) {
+                // Get window size
+                int window_width, window_height;
+                SDL_GetWindowSize(window, &window_width, &window_height);
+                
+                // Calculate aspect ratio scaling
+                float scale_x = (float)window_width / current_surface->w;
+                float scale_y = (float)window_height / current_surface->h;
+                float scale = std::min(scale_x, scale_y);
+                
+                int scaled_width = (int)(current_surface->w * scale);
+                int scaled_height = (int)(current_surface->h * scale);
+                
+                SDL_Rect dst_rect = {
+                    (window_width - scaled_width) / 2,
+                    (window_height - scaled_height) / 2,
+                    scaled_width,
+                    scaled_height
+                };
+                
+                SDL_RenderCopy(renderer, texture, nullptr, &dst_rect);
+                SDL_DestroyTexture(texture);
+            }
+        }
+        
+        // Draw status text
+        draw_status_text();
+        
+        SDL_RenderPresent(renderer);
+    }
+    
+    void draw_status_text() {
+        // Draw connection status and inference status
+        if (inference_running.load()) {
+            SDL_SetRenderDrawColor(renderer, 255, 255, 0, 255);
+        } else {
+            SDL_SetRenderDrawColor(renderer, 0, 255, 0, 255);
+        }
+        
+        // Draw a simple status indicator (rectangle)
+        SDL_Rect status_rect = {10, 10, 20, 20};
+        SDL_RenderFillRect(renderer, &status_rect);
+    }
+    
+    void run() {
+        bool running = true;
+        SDL_Event event;
+        
+        std::cout << "SDL Client Controls:" << std::endl;
+        std::cout << "- Space: Run inference on current image" << std::endl;
+        std::cout << "- O: Open image file dialog (simplified)" << std::endl;
+        std::cout << "- Q or ESC: Quit" << std::endl;
+        
+        while (running) {
+            while (SDL_PollEvent(&event)) {
+                switch (event.type) {
+                    case SDL_QUIT:
+                        running = false;
+                        break;
+                        
+                    case SDL_KEYDOWN:
+                        switch (event.key.keysym.sym) {
+                            case SDLK_ESCAPE:
+                            case SDLK_q:
+                                running = false;
+                                break;
+                                
+                            case SDLK_SPACE:
+                                if (current_surface) {
+                                    std::cout << "Running inference..." << std::endl;
+                                    auto image_data = surface_to_bytes(current_surface);
+                                    run_inference_async(image_data);
+                                } else {
+                                    std::cout << "No image loaded!" << std::endl;
+                                }
+                                break;
+                                
+                            case SDLK_o:
+                                // Simplified file loading (you'd want a proper file dialog)
+                                std::cout << "Enter image filename: ";
+                                std::string filename;
+                                std::cin >> filename;
+                                load_image(filename);
+                                break;
+                        }
+                        break;
+                        
+                    case SDL_DROPFILE:
+                        // Handle drag and drop
+                        if (event.drop.file) {
+                            load_image(event.drop.file);
+                            SDL_free(event.drop.file);
+                        }
+                        break;
+                }
+            }
+            
+            render();
+            SDL_Delay(16); // ~60 FPS
+        }
+    }
+};
+
+int main(int argc, char* argv[]) {
+    if (argc < 2) {
+        std::cout << "Usage: " << argv[0] << " <server_ip> [initial_image]" << std::endl;
+        return -1;
+    }
+    
+    std::string server_ip = argv[1];
+    
+    try {
+        HailoSDLClient client(server_ip, 8080);
+        
+        // Load initial image if provided
+        if (argc > 2) {
+            client.load_image(argv[2]);
+        }
+        
+        client.run();
+        
+    } catch (const std::exception& e) {
+        std::cerr << "Error: " << e.what() << std::endl;
+        return -1;
+    }
+    
+    return 0;
+}
