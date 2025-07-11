@@ -1,0 +1,59 @@
+Yes, ONNX Runtime supports NPU (Neural Processing Unit) acceleration for running machine learning models with dedicated AI hardware. Here's what I know about it:
+What it is:
+ONNX Runtime NPU is an execution provider that enables ONNX models to run on Neural Processing Units - specialized chips designed for AI workloads that can offer better performance and power efficiency compared to CPUs or GPUs for inference tasks.
+Key features:
+
+Hardware acceleration for AI inference workloads
+Lower power consumption compared to GPU inference
+Optimized for edge deployment scenarios
+Support for quantized models (INT8, etc.)
+
+Supported NPU hardware:
+
+Qualcomm Hexagon NPUs (in mobile/edge devices)
+Intel VPU (Vision Processing Units)
+Some ARM-based NPUs
+Various other vendor-specific NPU implementations
+
+Usage:
+You typically use it by specifying the NPU execution provider when creating an ONNX Runtime inference session, similar to how you'd specify CUDA or other providers.
+Since NPU support and capabilities are rapidly evolving, let me search for the most current information about ONNX Runtime NPU support and any recent developments.ONNX Runtime NPU support 202510 resultsONNX Runtime | Homeonnxruntime.aiReleases · microsoft/onnxruntimegithub.comCross-Platform Edge AI Made Easy with ONNX Runtime | Microsoft Community Hubmicrosoft.comONNX install guides and demos for the Intel AI PCintel.comonnxruntime·PyPIpypi.orgRun Machine Learning Inference on the NPU with PyTorch and ONNX — Riallto - An exploration framework for Ryzen AIriallto.aiGitHub - microsoft/onnxruntime: ONNX Runtime: cross-platform, high performance ML inferencing and training acceleratorgithub.comCopilot+ PCs developer guide | Microsoft Learnmicrosoft.comRelease ONNX Runtime v1.22 · microsoft/onnxruntimegithub.comIntroducing Windows ML: The future of machine learning development on Windows - Windows Developer Blogwindows.comLet me search for more specific information about current NPU providers and performance details.ONNX Runtime QNN NPU Qualcomm execution provider10 resultsQNN Execution Provider - Qualcommonnxruntime.aiONNX Runtime Execution Providersonnxruntime.aiUnlocking the power of Qualcomm QNN Execution Provider GPU backend for ONNX Runtimequalcomm.comSupport for Execution Providers - QNN · Issue #626 · microsoft/onnxruntime-genaigithub.comSupport for Execution Providers - QNN · microsoft/onnxruntime-genai · Discussion #660github.comCompiling Models — qai-hub documentation - Qualcommqualcomm.com[Mobile] QNN Execution provider mem alloc failure. · Issue #22288 · microsoft/onnxruntimegithub.comQualcomm - QNN | onnxruntimegithub.ioNuGet Gallery | Microsoft.ML.OnnxRuntime.QNN 1.22.0nuget.orgORT - QNN EP - Windows on Snapdragon - Qualcommqualcomm.comBased on the search results, I now have much more current information about ONNX Runtime NPU support. Here's what I found:
+ONNX Runtime NPU Support - Current State (2025)
+ONNX Runtime has significantly expanded its NPU support, especially for modern AI PCs and mobile devices. Here are the key developments:
+Major NPU Platforms Supported:
+Qualcomm Snapdragon NPUs:
+ONNX Runtime supports Qualcomm NPUs through the QNN (Qualcomm Neural Network) Execution Provider, which uses the Qualcomm AI Engine Direct SDK. This enables acceleration on Snapdragon X series NPUs in Copilot+ PCs and mobile devices with Snapdragon processors. Microsoft Community HubONNX Runtime
+Intel NPUs:
+Intel NPUs are supported through DirectML and WebNN execution providers, with OpenVINO toolkit integration for Intel CPUs, GPUs, and NPUs. Microsoft Community HubIntel
+AMD NPUs:
+AMD Ryzen AI NPUs are supported through dedicated execution providers that leverage both GPU and NPU capabilities. Introducing Windows ML: The future of machine learning development on Windows - Windows Developer Blog
+Key Recent Developments (2024-2025):
+
+Windows ML Integration: Microsoft announced Windows ML in May 2025, which is powered by ONNX Runtime and provides unified framework support for NPUs, GPUs, and CPUs across AMD, Intel, NVIDIA, and Qualcomm hardware. Introducing Windows ML: The future of machine learning development on Windows - Windows Developer Blog
+WebNN Support: ONNX Runtime Web now supports WebNN for NPU-accelerated inference directly in web browsers, enabling AI applications to run efficiently without additional software installation. Cross-Platform Edge AI Made Easy with ONNX Runtime | Microsoft Community Hub
+Generative AI Support: The ONNX Runtime Generative API with QNN accelerator can now run advanced Small Language Models (SLMs) like Phi 3.5 mini and Llama 3.2 3B on Qualcomm NPUs. Cross-Platform Edge AI Made Easy with ONNX Runtime | Microsoft Community Hub
+
+Performance and Capabilities:
+
+Snapdragon 8 Elite mobile devices can achieve around 100ms time-to-first-token for Llama 3.2 3B model with prompts up to 128 tokens. Cross-Platform Edge AI Made Easy with ONNX Runtime | Microsoft Community Hub
+QNN HTP backend only supports quantized models - FP32 models must be quantized to 8-bit or 16-bit integers first. QNN Execution Provider - Qualcomm
+Windows ML shows up to 20% performance improvement compared to other model formats. Introducing Windows ML: The future of machine learning development on Windows - Windows Developer Blog
+
+Usage Example:
+For Qualcomm NPUs, you'd typically use:
+pythonimport onnxruntime as ort
+
+# Create session with QNN EP for NPU acceleration
+session = ort.InferenceSession(
+    model_path, 
+    providers=['QNNExecutionProvider'],
+    provider_options=[{'backend_path': 'QnnHtp.dll'}]  # Windows
+    # or {'backend_path': 'libQnnHtp.so'} for Linux/Android
+)
+Current Limitations:
+
+QNN EP supports a subset of ONNX operators (Loops and Ifs are not supported) QNN Execution Provider - Qualcomm
+Quantization is required for NPU execution on most platforms
+Model size and complexity constraints vary by NPU hardware
+
+The NPU ecosystem in ONNX Runtime has matured significantly, especially for edge AI applications on modern laptops and mobile devices.
