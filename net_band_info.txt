@@ -1,0 +1,23 @@
+This Python script creates a comprehensive analysis of network bandwidth usage for distcc (distributed compilation) on a 2.5 Gbps switch with 2.5 Gb ethernet connections. Here's what it shows:
+Key Features:
+
+Dual plots: Bandwidth usage and network efficiency vs number of nodes
+Realistic distcc modeling: Accounts for source files going out and larger object files coming back
+Network limitations: Shows both ethernet per-node limits and switch aggregate limits
+Efficiency analysis: How well the network utilizes available bandwidth
+
+What the graph reveals:
+
+Sweet spot: There's an optimal number of nodes where you get maximum bandwidth before hitting switch limits
+Switch bottleneck: The 2.5 Gbps switch becomes the limiting factor as you add more nodes
+Diminishing returns: Adding more nodes beyond the optimal point doesn't increase total bandwidth
+Efficiency drop: Network efficiency decreases as you approach switch capacity limits
+
+Key insights for your setup:
+
+The switch will likely become saturated around 4-6 nodes
+Maximum effective bandwidth will be around 2 Gbps (80% of switch capacity)
+Each node can theoretically use up to 2 Gbps of its ethernet connection
+Beyond the optimal point, adding nodes actually reduces per-node bandwidth
+
+The script includes detailed statistics and a scaling analysis table to help you determine the most cost-effective number of nodes for your distcc setup. You can adjust the traffic patterns and efficiency factors based on your specific compilation workloads.
