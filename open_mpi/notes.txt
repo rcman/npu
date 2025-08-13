@@ -1,1 +1,12 @@
 https://download.open-mpi.org/release/open-mpi/v5.0/openmpi-5.0.8.tar.gz
+
+
+shell$ tar xf openmpi-<version>.tar.bz2
+shell$ cd openmpi-<version>
+shell$ ./configure --prefix=<path> [...options...] 2>&1 | tee config.out
+<... lots of output ...>
+
+# Use an integer value of N for parallel builds
+shell$ make [-j N] all 2>&1 | tee make.out
+
+
