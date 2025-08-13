@@ -51,3 +51,18 @@ for host in hosts:
         print(f"❌ Failed to connect or setup on {host}: {e}")
 
 
+
+ Running Remote Scripts
+Once the new admin account is set up with SSH key-based authentication, you can use the same Python script with Paramiko or Fabric to run any remote script.
+
+Your script would:
+
+Connect to each machine using the new admin user and your private key.
+
+Use ssh.exec_command() to execute the desired script or commands.
+
+For more complex tasks, you can use sftp (Secure File Transfer Protocol) to upload the script file and then execute it remotely.
+
+
+
+
