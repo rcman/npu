@@ -59,17 +59,25 @@ slots is a key concept. It tells MPI the capacity of a machine, usually correspo
 Tell mpirun to use the hostfile:
 code
 Bash
+
 # Run 16 processes across the machines listed in my_hosts.txt,
+
 # respecting the 'slots' for each.
+
 mpirun -n 16 --hostfile my_hosts.txt ./my_mpi_app
+
 How it works: mpirun reads and parses my_hosts.txt. It sees it has a total capacity of 1 (default) + 8 + 8 = 17 slots. You requested 16 processes, so it will distribute them: 1 process on node01, 8 on node02, and the remaining 7 on node03. Then, it ssh's to node01, node02, and node03 to launch the daemons and your application.
 Method 3: Integration with a Job Scheduler (The Professional HPC Approach)
 In any real High-Performance Computing (HPC) center, you don't run mpirun directly on a list of hosts you picked yourself. You submit your job to a resource manager or job scheduler like Slurm, PBS/Torque, or LSF.
 This is the most sophisticated and robust method.
 You Request Resources: You write a submission script that tells the scheduler what you need.
+
 Example Slurm submission script (submit.sh):
+
 code
+
 Bash
+
 #!/bin/bash
 #SBATCH --nodes=4          # Request 4 entire machines
 #SBATCH --ntasks-per-node=32 # Request 32 processes on each machine
@@ -77,25 +85,31 @@ Bash
 
 # The scheduler will handle finding the hosts.
 # We just use mpirun directly.
+
 mpirun ./my_mpi_app
+
 The Scheduler Allocates Machines: The scheduler looks at the state of the entire cluster, finds 4 idle nodes that meet your requirements, and reserves them for your job.
 The Scheduler Informs MPI: This is the magic step. When the scheduler starts your script on the first of your allocated nodes, it sets special environment variables. mpirun is built to automatically detect these variables.
+
 Slurm creates a variable like SLURM_NODELIST.
 PBS/Torque creates a file pointed to by $PBS_NODEFILE.
 mpirun Reads the Environment: When you simply type mpirun ./my_mpi_app inside the job script, the MPI runtime environment automatically:
 Detects it's running inside a Slurm (or PBS, etc.) job.
+
 Reads the SLURM_NODELIST environment variable to get the list of hosts the scheduler assigned.
+
 Parses that list.
+
 ssh's to those specific hosts to launch the job.
 You never have to manually create a hostfile or type hostnames. The multi-million dollar scheduler does the "discovery" (allocation) for you, and mpirun simply listens to what the scheduler tells it.
+
 Summary: The Party Invitation Analogy
 Think of it like planning a party (./my_mpi_app).
 Method 1 (Command Line): You stand at the door and shout the names of the two friends you want to let in.
 Method 2 (Hostfile): You write down a guest list (my_hosts.txt) and give it to your bouncer (mpirun), who then only lets in people on the list.
 Method 3 (Job Scheduler): You hire a professional event planning company (Slurm). They find a venue, book it, and give your bouncer (mpirun) the official, approved guest list for that night. The bouncer just has to read the list they are given.
+
 In all cases, MPI is not wandering the streets looking for guests; it works from a pre-defined, explicit list of machines.
-
-
 
         # Create the new user and set their password
         ssh.exec_command(f'sudo useradd -m -s /bin/bash {new_admin_user}')
@@ -111,8 +125,6 @@ In all cases, MPI is not wandering the streets looking for guests; it works from
         ssh.close()
     except Exception as e:
         print(f"❌ Failed to connect or setup on {host}: {e}")
-
-
 
  Running Remote Scripts
 Once the new admin account is set up with SSH key-based authentication, you can use the same Python script with Paramiko or Fabric to run any remote script.
