@@ -10,3 +10,44 @@ shell$ ./configure --prefix=<path> [...options...] 2>&1 | tee config.out
 shell$ make [-j N] all 2>&1 | tee make.out
 
 
+
+user with root permissions
+
+
+import paramiko
+
+# List of your target machines
+hosts = ['192.168.1.101', '192.168.1.102', 'server.example.com']
+username = 'your_existing_user'
+password = 'your_existing_password' # A temporary password or existing user credentials
+
+# The new user to be created and their password
+new_admin_user = 'new_admin'
+new_admin_password = 'a_secure_password'
+
+# SSH public key content to be added
+ssh_public_key = 'ssh-rsa AAAAB3Nz...' # Replace with your actual public key
+
+for host in hosts:
+    try:
+        # Establish an SSH connection
+        ssh = paramiko.SSHClient()
+        ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+        ssh.connect(host, username=username, password=password)
+
+        # Create the new user and set their password
+        ssh.exec_command(f'sudo useradd -m -s /bin/bash {new_admin_user}')
+        ssh.exec_command(f'echo "{new_admin_user}:{new_admin_password}" | sudo chpasswd')
+
+        # Add the new user to the sudo group (or wheel group, depending on the distro)
+        ssh.exec_command(f'sudo usermod -aG sudo {new_admin_user}')
+
+        # Set up passwordless SSH login for the new user
+        ssh.exec_command(f'sudo su - {new_admin_user} -c "mkdir -p .ssh && echo \'{ssh_public_key}\' >> .ssh/authorized_keys && chmod 700 .ssh && chmod 600 .ssh/authorized_keys"')
+
+        print(f"✅ Successfully set up {new_admin_user} on {host}")
+        ssh.close()
+    except Exception as e:
+        print(f"❌ Failed to connect or setup on {host}: {e}")
+
+
